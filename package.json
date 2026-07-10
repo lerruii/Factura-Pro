@@ -1,0 +1,21 @@
+{
+  "name": "facturapro-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FacturaPro — SaaS de contabilidad y facturación con QR de pago",
+  "type": "module",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

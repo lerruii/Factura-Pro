@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(python --version)",
+      "PowerShell(python \"C:\\\\Users\\\\Lerruii\\\\.claude\\\\plugins\\\\cache\\\\ui-ux-pro-max-skill\\\\ui-ux-pro-max\\\\2.6.2\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"invoicing accounting fintech SaaS dashboard professional\" --design-system -p \"FacturaPro\" -f markdown)"
+    ]
+  }
+}
