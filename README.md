@@ -81,15 +81,54 @@ Sin configurar, el botón «Pasar a Pro» activa el plan directamente (modo demo
 rellena `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` y `STRIPE_WEBHOOK_SECRET`
 (instrucciones dentro del archivo).
 
-## Despliegue en producción
+## Despliegue en producción (hacerlo público en internet)
 
-Cualquier hosting con Node 22.13+ sirve (VPS, Railway, Render, Fly.io…):
+El proyecto incluye un `Dockerfile` y un endpoint `/health`, así que funciona
+en cualquier hosting moderno. **Importante**: la base de datos es un archivo
+SQLite en `data/`, por lo que el hosting necesita **disco persistente**
+(volumen); en los planes "gratis sin disco" los datos se borrarían en cada
+despliegue.
 
-1. Sube el proyecto y ejecuta `npm install && npm start` detrás de un proxy
-   HTTPS (Caddy, Nginx…).
-2. Define `NODE_ENV=production` (activa cookies seguras) y, si quieres,
-   `JWT_SECRET` propio.
-3. Haz copia de seguridad periódica de la carpeta `data/`.
+### Opción recomendada: Railway (~5 $/mes, con dominio y HTTPS incluidos)
+
+1. Crea una cuenta en https://railway.app (puedes entrar con GitHub).
+2. Sube este repositorio a GitHub:
+   ```bash
+   # crea un repo vacío en github.com llamado facturapro y luego:
+   git remote add origin https://github.com/TU_USUARIO/facturapro.git
+   git push -u origin main
+   ```
+3. En Railway: **New Project → Deploy from GitHub repo** → elige `facturapro`.
+   Detecta el `Dockerfile` y despliega solo.
+4. En el servicio → **Variables**: añade `NODE_ENV=production`.
+5. En el servicio → **Settings → Volumes**: crea un volumen montado en
+   `/app/data` (aquí vive la base de datos).
+6. En **Settings → Networking → Generate Domain**: tendrás tu URL pública
+   `https://facturapro-xxxx.up.railway.app`. Si compras un dominio propio
+   (p. ej. en Namecheap o Cloudflare), añádelo en **Custom Domain**.
+
+Cada `git push` a `main` re-despliega automáticamente.
+
+### Alternativas
+
+- **Render.com**: igual de fácil (Web Service desde GitHub + Disk en `/app/data`,
+  plan Starter ~7 $/mes). El plan gratuito NO tiene disco persistente.
+- **Fly.io**: `fly launch` + `fly volumes create` (CLI, algo más técnico).
+- **VPS** (Hetzner/DigitalOcean, 4–6 €/mes): control total. Instala Node 24 o
+  Docker, ejecuta la app y pon delante Caddy (`caddy reverse-proxy --from
+  tudominio.com --to localhost:3000`) para HTTPS automático.
+- **Probarlo ya sin pagar**: instala Cloudflare Tunnel y ejecuta
+  `cloudflared tunnel --url http://localhost:3000` — te da una URL pública
+  temporal que funciona mientras tu PC esté encendido.
+
+### Lista de comprobación de producción
+
+- [ ] `NODE_ENV=production` definido (activa cookies seguras; requiere HTTPS)
+- [ ] Volumen/disco persistente montado en `data/`
+- [ ] Copia de seguridad periódica de `data/facturapro.db`
+- [ ] Claves de Stripe en variables de entorno si quieres cobrar el plan Pro
+- [ ] Borra `data/` local antes del primer despliegue si hiciste pruebas (o
+      simplemente no lo subas: está en `.gitignore` y `.dockerignore`)
 
 > La migración desde la versión local anterior es automática: al iniciar sesión
 > por primera vez en el mismo navegador, la app ofrece importar los datos
