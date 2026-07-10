@@ -111,7 +111,8 @@ $('#logout-btn').addEventListener('click', () => cerrarSesion());
 
 const TITULOS = {
   panel: 'Panel', facturas: 'Facturas', clientes: 'Clientes', productos: 'Productos',
-  gastos: 'Gastos', contabilidad: 'Contabilidad', ajustes: 'Ajustes', cuenta: 'Mi cuenta'
+  gastos: 'Gastos', contabilidad: 'Contabilidad', ajustes: 'Ajustes', cuenta: 'Mi cuenta',
+  admin: 'Administración'
 };
 
 function navegar() {
@@ -131,7 +132,8 @@ function navegar() {
   const vistas = {
     panel: vistaPanel, facturas: vistaFacturas, clientes: vistaClientes,
     productos: vistaProductos, gastos: vistaGastos,
-    contabilidad: vistaContabilidad, ajustes: vistaAjustes, cuenta: vistaCuenta
+    contabilidad: vistaContabilidad, ajustes: vistaAjustes, cuenta: vistaCuenta,
+    admin: vistaAdmin
   };
   $('#topbar-title').textContent = TITULOS[ruta] || 'Panel';
   (vistas[ruta] || vistaPanel)();
@@ -331,7 +333,7 @@ function marcarPagada(id) {
 function modalLimite(tipo) {
   const max = limitePlan(tipo);
   openModal('Límite del plan Gratis', `
-    <p style="margin:0 0 8px;color:var(--text-2)">Has llegado al máximo de <b>${max} ${tipo}</b> del plan Gratis.</p>
+    <p style="margin:0 0 8px;color:var(--text-2)">Has llegado al máximo de <b>${max} ${tipo}</b> del plan Gratis${tipo === 'facturas' ? ' (el contador es acumulado: las facturas eliminadas también cuentan)' : ''}.</p>
     <p style="margin:0 0 20px;color:var(--text-2)">Pasa al plan <b>Pro</b> para ${tipo === 'facturas' ? 'facturar' : 'añadir clientes'} sin límites.</p>
     <div class="form-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Ahora no</button>
@@ -1123,7 +1125,8 @@ function exportarFacturasCSV(año) {
 function vistaCuenta() {
   const esPro = currentUser.plan === 'pro';
   const lim = currentUser.limites || {};
-  const usoF = state.facturas.length;
+  // el contador de facturas es acumulado: las eliminadas también cuentan
+  const usoF = Math.max(Number(currentUser.uso?.facturas) || 0, state.facturas.length);
   const usoC = state.clientes.length;
   const barra = (n, max) => {
     if (max === null || max === undefined) return `<div class="uso-linea"><span>${n}</span><span class="uso-max">sin límite</span></div>`;
@@ -1141,7 +1144,8 @@ function vistaCuenta() {
           <div><span class="kpi-label">Plan actual</span><div><span class="chip ${esPro ? 'chip-pagada' : 'chip-borrador'}">${esPro ? 'Pro' : 'Gratis'}</span></div></div>
         </div>
         <div class="form-grid" style="margin-top:18px">
-          <div class="field"><label>Facturas</label>${barra(usoF, lim.maxFacturas)}</div>
+          <div class="field"><label>Facturas creadas</label>${barra(usoF, lim.maxFacturas)}
+            ${!esPro ? '<div class="help">Contador acumulado: eliminar una factura no libera cupo.</div>' : ''}</div>
           <div class="field"><label>Clientes</label>${barra(usoC, lim.maxClientes)}</div>
         </div>
       </div>
@@ -1198,6 +1202,129 @@ function vistaCuenta() {
       up.textContent = 'Pasar a Pro';
     }
   };
+}
+
+/* ============================================================
+   VISTA: Administración (solo administrador)
+   ============================================================ */
+
+async function vistaAdmin() {
+  if (!currentUser?.admin) { location.hash = '#/panel'; return; }
+  view.innerHTML = `<div class="card card-pad"><p class="card-sub" style="margin:0">Cargando panel…</p></div>`;
+
+  let r;
+  try {
+    r = await apiFetch('/api/admin/resumen');
+  } catch (e) {
+    view.innerHTML = `<div class="card card-pad"><p style="color:var(--danger);margin:0">${escapeHtml(e.message)}</p></div>`;
+    return;
+  }
+
+  const webhookUrl = location.origin + '/api/billing/webhook';
+
+  view.innerHTML = `
+    <div class="grid-kpi" style="grid-template-columns:repeat(3,1fr)">
+      <div class="card kpi"><div class="kpi-label">${ICON.users} Usuarios</div><div class="kpi-value">${r.stats.total}</div></div>
+      <div class="card kpi"><div class="kpi-label">${ICON.up} En plan Pro</div><div class="kpi-value">${r.stats.pro}</div></div>
+      <div class="card kpi"><div class="kpi-label">${ICON.invoice} Facturas creadas</div><div class="kpi-value">${r.stats.facturas}</div></div>
+    </div>
+
+    <div class="card card-pad" style="margin-bottom:20px">
+      <div class="card-title">Pasarela de pagos (Stripe)</div>
+      <p class="card-sub">
+        Estado: ${r.stripe.configurado
+          ? '<span class="chip chip-pagada">Configurada — los clientes pagan con tarjeta</span>'
+          : '<span class="chip chip-borrador">No configurada — "Pasar a Pro" funciona en modo demo</span>'}
+      </p>
+      <form id="form-stripe" novalidate>
+        <div class="form-grid">
+          <div class="field">
+            <label>Clave secreta (sk_live_… o sk_test_…)</label>
+            <input id="st-key" class="mono" type="password" autocomplete="off"
+              placeholder="${r.stripe.secretKey ? 'Actual: ' + escapeHtml(r.stripe.secretKey) : 'sk_live_…'}">
+          </div>
+          <div class="field">
+            <label>Price ID de la suscripción Pro</label>
+            <input id="st-price" class="mono" autocomplete="off"
+              value="${escapeHtml(r.stripe.priceId)}" placeholder="price_…">
+          </div>
+          <div class="field full">
+            <label>Webhook signing secret (whsec_…)</label>
+            <input id="st-wh" class="mono" type="password" autocomplete="off"
+              placeholder="${r.stripe.webhookSecret ? 'Actual: ' + escapeHtml(r.stripe.webhookSecret) : 'whsec_…'}">
+            <div class="help">Crea el webhook en Stripe apuntando a <b class="mono">${escapeHtml(webhookUrl)}</b> con los eventos <b>checkout.session.completed</b> y <b>customer.subscription.deleted</b>.</div>
+          </div>
+        </div>
+        <p class="card-sub" style="margin:12px 0 0">Deja un campo vacío para conservar el valor actual; escribe <b>-</b> para borrarlo.</p>
+        <div class="form-actions" style="justify-content:flex-start">
+          <button type="submit" class="btn btn-primary">${ICON.check} Guardar pasarela</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <div class="card-pad" style="padding-bottom:0">
+        <div class="card-title">Usuarios</div>
+        <p class="card-sub">Puedes cambiar el plan de cualquier usuario manualmente (p. ej. cortesías o pagos fuera de Stripe).</p>
+      </div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Email</th><th>Nombre</th><th>Alta</th><th class="num">Facturas creadas</th><th class="num">Activas</th><th class="num">Clientes</th><th>Plan</th></tr></thead>
+        <tbody>
+          ${r.usuarios.map(u => `<tr>
+            <td style="font-weight:600">${escapeHtml(u.email)} ${u.admin ? '<span class="chip chip-emitida" style="margin-left:6px">Admin</span>' : ''}</td>
+            <td>${escapeHtml(u.nombre || '—')}</td>
+            <td>${escapeHtml((u.creada || '').slice(0, 10))}</td>
+            <td class="num">${u.facturasCreadas}</td>
+            <td class="num">${u.facturasActuales}</td>
+            <td class="num">${u.clientes}</td>
+            <td>
+              <select data-uid="${u.id}" class="admin-plan" aria-label="Plan de ${escapeHtml(u.email)}" style="padding:6px 10px;border:1px solid var(--border-strong);border-radius:7px;background:var(--surface);color:var(--text)">
+                <option value="free" ${u.plan === 'free' ? 'selected' : ''}>Gratis</option>
+                <option value="pro" ${u.plan === 'pro' ? 'selected' : ''}>Pro</option>
+              </select>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table></div>
+    </div>`;
+
+  $('#form-stripe').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = e.target.querySelector('button[type=submit]');
+    btn.disabled = true;
+    try {
+      await apiFetch('/api/admin/stripe', {
+        method: 'POST',
+        body: {
+          secretKey: $('#st-key').value.trim(),
+          priceId: $('#st-price').value.trim(),
+          webhookSecret: $('#st-wh').value.trim()
+        }
+      });
+      toast('Pasarela guardada');
+      vistaAdmin();
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false;
+    }
+  });
+
+  view.querySelectorAll('.admin-plan').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      try {
+        await apiFetch('/api/admin/plan', { method: 'POST', body: { userId: Number(sel.dataset.uid), plan: sel.value } });
+        toast('Plan actualizado');
+        if (Number(sel.dataset.uid) && currentUser) {
+          const me = await apiFetch('/api/me');
+          currentUser = me.user;
+          pintarCuentaSidebar();
+        }
+      } catch (err) {
+        toast(err.message, 'error');
+        vistaAdmin();
+      }
+    });
+  });
 }
 
 /* ============================================================

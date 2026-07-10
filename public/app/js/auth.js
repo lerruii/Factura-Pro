@@ -33,6 +33,8 @@ function pintarCuentaSidebar() {
   el.querySelector('.su-email').textContent = currentUser.email;
   el.querySelector('.su-plan').textContent = currentUser.limites?.nombre || 'Gratis';
   el.querySelector('.su-plan').classList.toggle('pro', currentUser.plan === 'pro');
+  const adminLink = $('#nav-admin');
+  if (adminLink) adminLink.hidden = !currentUser.admin;
 }
 
 async function cerrarSesion() {

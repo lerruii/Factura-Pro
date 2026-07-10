@@ -5,7 +5,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { usuarios, JWT_SECRET } from './db.js';
+import { usuarios, JWT_SECRET, esAdmin } from './db.js';
 import { LIMITES, usoDe } from './data.js';
 
 export const authRouter = Router();
@@ -28,8 +28,9 @@ function publicUser(user) {
     email: user.email,
     nombre: user.nombre,
     plan: user.plan,
+    admin: esAdmin(user),
     limites: LIMITES[user.plan] || LIMITES.free,
-    uso: usoDe(user.id)
+    uso: usoDe(user)
   };
 }
 

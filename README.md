@@ -74,12 +74,34 @@ data/           Base de datos y secreto de sesión (no subir a git)
 Seguridad: contraseñas con bcrypt, sesión JWT en cookie `httpOnly` + `SameSite=Lax`,
 límites de plan aplicados también en el servidor, datos de cada cuenta aislados.
 
+## Panel de administración
+
+En `/app/#/admin` (enlace «Administración» en la barra lateral) el administrador
+puede ver todos los usuarios con su plan y consumo, **cambiar el plan de
+cualquier usuario manualmente** y **configurar la pasarela de pagos (Stripe)
+desde la web**, sin tocar el servidor.
+
+¿Quién es administrador? El email definido en la variable `ADMIN_EMAIL` o, si
+no está definida, **el primer usuario registrado** en la instancia. En
+producción: registra tu cuenta nada más desplegar (o define `ADMIN_EMAIL` en
+las variables del hosting).
+
+### Límite del plan Gratis
+
+El límite de 20 facturas es **acumulado**: cuenta las facturas creadas en la
+vida de la cuenta, de modo que eliminar facturas no libera cupo. El límite de
+clientes sí es sobre los activos.
+
 ## Suscripciones con Stripe (opcional)
 
 Sin configurar, el botón «Pasar a Pro» activa el plan directamente (modo demo,
-útil para probar). Para cobrar de verdad, copia `.env.example` a `.env` y
-rellena `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` y `STRIPE_WEBHOOK_SECRET`
-(instrucciones dentro del archivo).
+útil para probar). Para cobrar de verdad tienes dos opciones:
+
+- **Desde el panel de administración** (recomendado): pega la clave secreta,
+  el price id y el webhook secret en la sección «Pasarela de pagos». Se
+  guardan en la base de datos y tienen prioridad sobre las variables de entorno.
+- **Por variables de entorno**: `STRIPE_SECRET_KEY`, `STRIPE_PRICE_ID` y
+  `STRIPE_WEBHOOK_SECRET` (ver `.env.example`).
 
 ## Despliegue en producción (hacerlo público en internet)
 

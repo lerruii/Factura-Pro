@@ -1,26 +1,35 @@
 /* ============================================================
-   FacturaPro SaaS — Suscripciones (Stripe si está configurado)
+   FacturaPro SaaS — Suscripciones (Stripe)
 
-   Con STRIPE_SECRET_KEY + STRIPE_PRICE_ID en .env se usa Stripe
-   Checkout real. Sin configurar, el botón "Pasar a Pro" activa el
-   plan directamente (modo demo) para poder probar el producto.
+   Las claves se leen de la tabla config (editables desde el panel
+   de administración) y, si no existen, de las variables de entorno.
+   Sin claves configuradas, "Pasar a Pro" activa el plan directamente
+   (modo demo) para poder probar el producto.
    ============================================================ */
 
 import { Router } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { usuarios } from './db.js';
+import { usuarios, config, db } from './db.js';
 import { LIMITES } from './data.js';
 
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || '';
-const STRIPE_PRICE = process.env.STRIPE_PRICE_ID || '';
-const STRIPE_WH_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
-export const stripeConfigurado = Boolean(STRIPE_KEY && STRIPE_PRICE);
+export function stripeCfg() {
+  return {
+    key: config.get('stripe_secret_key') || process.env.STRIPE_SECRET_KEY || '',
+    price: config.get('stripe_price_id') || process.env.STRIPE_PRICE_ID || '',
+    whSecret: config.get('stripe_webhook_secret') || process.env.STRIPE_WEBHOOK_SECRET || ''
+  };
+}
+
+export function stripeConfigurado() {
+  const c = stripeCfg();
+  return Boolean(c.key && c.price);
+}
 
 async function stripe(pathName, params) {
   const res = await fetch('https://api.stripe.com/v1/' + pathName, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${STRIPE_KEY}`,
+      Authorization: `Bearer ${stripeCfg().key}`,
       'Content-Type': 'application/x-www-form-urlencoded'
     },
     body: new URLSearchParams(params)
@@ -33,14 +42,14 @@ async function stripe(pathName, params) {
 export const billingRouter = Router();
 
 billingRouter.get('/config', (req, res) => {
-  res.json({ stripe: stripeConfigurado, planes: LIMITES });
+  res.json({ stripe: stripeConfigurado(), planes: LIMITES });
 });
 
 /* Inicia el pago de la suscripción Pro */
 billingRouter.post('/checkout', async (req, res) => {
   const origin = `${req.protocol}://${req.get('host')}`;
 
-  if (!stripeConfigurado) {
+  if (!stripeConfigurado()) {
     // Modo demo: sin pasarela configurada se activa Pro directamente
     usuarios.cambiarPlan(req.user.id, 'pro');
     return res.json({ demo: true, plan: 'pro' });
@@ -49,7 +58,7 @@ billingRouter.post('/checkout', async (req, res) => {
   try {
     const session = await stripe('checkout/sessions', {
       mode: 'subscription',
-      'line_items[0][price]': STRIPE_PRICE,
+      'line_items[0][price]': stripeCfg().price,
       'line_items[0][quantity]': '1',
       client_reference_id: String(req.user.id),
       customer_email: req.user.email,
@@ -66,12 +75,13 @@ billingRouter.post('/checkout', async (req, res) => {
 /* Webhook de Stripe: activa/desactiva el plan según la suscripción.
    Requiere body crudo (se monta con express.raw en index.js). */
 export function stripeWebhook(req, res) {
-  if (!STRIPE_WH_SECRET) return res.status(501).end();
+  const whSecret = stripeCfg().whSecret;
+  if (!whSecret) return res.status(501).end();
   try {
     const sig = req.get('stripe-signature') || '';
     const parts = Object.fromEntries(sig.split(',').map(p => p.split('=')));
     const payload = `${parts.t}.${req.body.toString('utf8')}`;
-    const expected = createHmac('sha256', STRIPE_WH_SECRET).update(payload).digest('hex');
+    const expected = createHmac('sha256', whSecret).update(payload).digest('hex');
     const okFirma = parts.v1 && expected.length === parts.v1.length &&
       timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
     if (!okFirma) return res.status(400).json({ error: 'Firma no válida' });
@@ -97,6 +107,5 @@ export function stripeWebhook(req, res) {
   }
 }
 
-import { db } from './db.js';
 const qByCustomer = db.prepare('SELECT id FROM users WHERE stripe_customer = ?');
 function usuariosPorCustomer(customer) { return qByCustomer.get(customer); }

@@ -242,7 +242,10 @@ function limitePlan(tipo) {
 function limiteAlcanzado(tipo) {
   const max = limitePlan(tipo);
   if (max === null) return false;
-  const n = tipo === 'facturas' ? state.facturas.length : state.clientes.length;
+  // facturas: cuenta el acumulado histórico (el servidor no descuenta las borradas)
+  const n = tipo === 'facturas'
+    ? Math.max(Number(currentUser?.uso?.facturas) || 0, state.facturas.length)
+    : state.clientes.length;
   return n >= max;
 }
 

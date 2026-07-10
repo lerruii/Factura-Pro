@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { authRouter, requireAuth, meHandler } from './auth.js';
 import { dataRouter } from './data.js';
 import { billingRouter, stripeWebhook, stripeConfigurado } from './billing.js';
+import { adminRouter, requireAdmin } from './admin.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT) || 3000;
@@ -31,6 +32,7 @@ app.use('/api/auth', authRouter);
 app.get('/api/me', requireAuth, meHandler);
 app.use('/api/data', requireAuth, dataRouter);
 app.use('/api/billing', requireAuth, billingRouter);
+app.use('/api/admin', requireAuth, requireAdmin, adminRouter);
 
 app.get('/health', (req, res) => res.json({ ok: true })); // comprobación de vida para el hosting
 
@@ -43,5 +45,5 @@ app.listen(PORT, () => {
   console.log(`FacturaPro SaaS escuchando en http://localhost:${PORT}`);
   console.log(`  Landing:    http://localhost:${PORT}/`);
   console.log(`  Aplicación: http://localhost:${PORT}/app/`);
-  console.log(`  Stripe:     ${stripeConfigurado ? 'configurado' : 'no configurado (upgrade en modo demo)'}`);
+  console.log(`  Stripe:     ${stripeConfigurado() ? 'configurado' : 'no configurado (upgrade en modo demo)'}`);
 });
