@@ -12,6 +12,15 @@ let currentUser = null;  // { email, nombre, plan, limites, uso }
    Sistemas contables por país
    ============================================================ */
 
+/*
+  Cada país define, además de impuestos y moneda, los requisitos legales de
+  contenido de la factura:
+  - infoLegalHint: qué información legal del emisor exige la normativa
+  - camposFactura: campos fiscales obligatorios por factura (forma de pago…)
+  - letras: importe en letras al pie (SUNAT / DIAN / SAT)
+  - leyendaExenta: leyenda automática cuando hay conceptos al 0 %
+  - padNumero / serieDefecto: formato de numeración exigido
+*/
 const PAISES = {
   ES: {
     nombre: 'España', moneda: 'EUR', locale: 'es-ES',
@@ -19,7 +28,10 @@ const PAISES = {
     retencion: { nombre: 'IRPF', etiqueta: 'Retención IRPF', tasas: [0, 7, 15, 19], ayuda: 'Solo para profesionales sujetos a retención' },
     taxId: 'NIF / CIF', docTitulo: 'FACTURA', qrSepa: true, factorDemo: 1, idioma: 'es',
     resumenNota: 'Base para los modelos 303 (IVA) y 130 (IRPF).',
-    baseLabel: 'Base imponible'
+    baseLabel: 'Base imponible',
+    padNumero: 4,
+    infoLegalHint: 'Datos registrales si eres sociedad (Registro Mercantil, tomo, folio…). Opcional.',
+    leyendaExenta: 'Operación exenta o no sujeta a IVA conforme a la Ley 37/1992 del IVA.'
   },
   PE: {
     nombre: 'Perú', moneda: 'PEN', locale: 'es-PE',
@@ -27,7 +39,14 @@ const PAISES = {
     retencion: null,
     taxId: 'RUC', docTitulo: 'FACTURA ELECTRÓNICA', qrSepa: false, factorDemo: 3.5, idioma: 'es',
     resumenNota: 'Base para la declaración mensual de IGV-Renta ante SUNAT (PDT 621).',
-    baseLabel: 'Op. gravada'
+    baseLabel: 'Op. gravada',
+    padNumero: 8, serieDefecto: 'F001',
+    letras: { moneda: 'SOLES' },
+    infoLegalHint: 'Domicilio fiscal y, si aplica, código de establecimiento anexo SUNAT. Opcional.',
+    camposFactura: [
+      { campo: 'formaPago', etiqueta: 'Forma de pago', opciones: ['Contado', 'Crédito'] }
+    ],
+    leyendaExenta: 'Operación exonerada o inafecta al IGV.'
   },
   CO: {
     nombre: 'Colombia', moneda: 'COP', locale: 'es-CO',
@@ -35,7 +54,31 @@ const PAISES = {
     retencion: { nombre: 'Retefuente', etiqueta: 'Retención en la fuente', tasas: [0, 1, 2, 2.5, 3.5, 4, 6, 10, 11], ayuda: 'Según concepto y régimen (DIAN)' },
     taxId: 'NIT', docTitulo: 'FACTURA DE VENTA', qrSepa: false, factorDemo: 4200, idioma: 'es',
     resumenNota: 'Base para la declaración de IVA y de retención en la fuente (DIAN).',
-    baseLabel: 'Subtotal'
+    baseLabel: 'Subtotal',
+    padNumero: 4,
+    letras: { moneda: 'PESOS', sufijo: 'M/CTE' },
+    infoLegalHint: 'Exigido por la DIAN: resolución de facturación (número, fecha y rango autorizado) y régimen (responsable / no responsable de IVA).',
+    camposFactura: [
+      { campo: 'formaPago', etiqueta: 'Forma de pago', opciones: ['Contado', 'Crédito'] }
+    ],
+    leyendaExenta: 'Incluye conceptos excluidos o exentos de IVA.'
+  },
+  MX: {
+    nombre: 'México', moneda: 'MXN', locale: 'es-MX',
+    impuesto: { nombre: 'IVA', tasas: [16, 8, 0], defecto: 16 },
+    retencion: { nombre: 'Ret. ISR', etiqueta: 'Retención ISR', tasas: [0, 1.25, 10], ayuda: 'Honorarios a personas morales: 10 % (SAT)' },
+    taxId: 'RFC', docTitulo: 'FACTURA', qrSepa: false, factorDemo: 17, idioma: 'es',
+    resumenNota: 'Base para las declaraciones mensuales de IVA e ISR ante el SAT.',
+    baseLabel: 'Subtotal',
+    padNumero: 4,
+    letras: { moneda: 'PESOS', sufijo: 'M.N.' },
+    infoLegalHint: 'Exigido por el SAT: régimen fiscal (p. ej. 612 — Personas Físicas con Actividades Empresariales) y lugar de expedición (código postal).',
+    camposFactura: [
+      { campo: 'usoCfdi', etiqueta: 'Uso CFDI', opciones: ['G03 — Gastos en general', 'G01 — Adquisición de mercancías', 'I01 — Construcciones', 'D01 — Honorarios médicos', 'P01 — Por definir'] },
+      { campo: 'formaPago', etiqueta: 'Forma de pago (SAT)', opciones: ['03 — Transferencia electrónica', '01 — Efectivo', '04 — Tarjeta de crédito', '28 — Tarjeta de débito', '99 — Por definir'] },
+      { campo: 'metodoPago', etiqueta: 'Método de pago', opciones: ['PUE — Pago en una sola exhibición', 'PPD — Pago en parcialidades o diferido'] }
+    ],
+    leyendaExenta: 'Incluye operaciones a tasa 0 % o exentas conforme a la Ley del IVA.'
   },
   US: {
     nombre: 'Estados Unidos', moneda: 'USD', locale: 'en-US',
@@ -43,7 +86,9 @@ const PAISES = {
     retencion: null,
     taxId: 'EIN', docTitulo: 'INVOICE', qrSepa: false, factorDemo: 1, idioma: 'en',
     resumenNota: 'Sales tax cobrado por trimestre; la declaración depende de cada estado.',
-    baseLabel: 'Subtotal'
+    baseLabel: 'Subtotal',
+    padNumero: 4,
+    infoLegalHint: 'Additional legal or registration info (optional).'
   }
 };
 
@@ -96,7 +141,44 @@ function aplicarPais(codigo) {
   state.settings.pais = codigo;
   state.settings.facturacion.ivaDefecto = PAISES[codigo].impuesto.defecto;
   state.settings.facturacion.irpfDefecto = 0;
+  if (PAISES[codigo].serieDefecto) state.settings.facturacion.serie = PAISES[codigo].serieDefecto;
   configurarMoneda();
+}
+
+/* ---------- importe en letras (SUNAT / DIAN / SAT) ---------- */
+
+function enLetras(n) {
+  const U = ['', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE', 'DIEZ',
+    'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISEIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE', 'VEINTE'];
+  const D = ['', '', '', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'];
+  const C = ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS'];
+  const tres = x => {
+    if (x === 0) return '';
+    if (x === 100) return 'CIEN';
+    let s = '';
+    const c = Math.floor(x / 100), r = x % 100;
+    if (c) s += C[c] + ' ';
+    if (r === 0) { /* nada */ }
+    else if (r <= 20) s += U[r];
+    else if (r < 30) s += 'VEINTI' + U[r % 10];
+    else s += D[Math.floor(r / 10)] + (r % 10 ? ' Y ' + U[r % 10] : '');
+    return s.trim();
+  };
+  if (!n) return 'CERO';
+  let s = '';
+  const millones = Math.floor(n / 1e6), miles = Math.floor((n % 1e6) / 1000), resto = n % 1000;
+  if (millones) s += (millones === 1 ? 'UN MILLON' : tres(millones) + ' MILLONES') + ' ';
+  if (miles) s += (miles === 1 ? 'MIL' : tres(miles) + ' MIL') + ' ';
+  return (s + tres(resto)).trim();
+}
+
+/* "SON: MIL DOSCIENTOS CON 50/100 SOLES" — solo en países que lo exigen */
+function importeEnLetras(total) {
+  const letras = paisCfg().letras;
+  if (!letras) return '';
+  const entero = Math.floor(total);
+  const cent = Math.round((total - entero) * 100);
+  return `SON: ${enLetras(entero)} CON ${String(cent).padStart(2, '0')}/100 ${letras.moneda}${letras.sufijo ? ' ' + letras.sufijo : ''}`;
 }
 
 function defaultState() {
@@ -105,7 +187,7 @@ function defaultState() {
       pais: 'ES',
       empresa: {
         nombre: '', nif: '', direccion: '', cp: '', ciudad: '', provincia: '',
-        email: '', telefono: '', web: '', logo: ''
+        email: '', telefono: '', web: '', logo: '', infoLegal: ''
       },
       pago: {
         iban: '', bic: '', linkPago: '', datosCuenta: '',
@@ -356,8 +438,9 @@ function cargarDatosEjemplo() {
   );
 
   const y = new Date().getFullYear();
+  const serieDemo = cfg.serieDefecto || `F-${y}`;
   const mk = (num, clienteId, fecha, estado, lineas, fechaPago) => ({
-    id: uid(), serie: `F-${y}`, numero: String(num).padStart(4, '0'),
+    id: uid(), serie: serieDemo, numero: String(num).padStart(cfg.padNumero || 4, '0'),
     fecha, vencimiento: sumaDias(fecha, 30), clienteId, lineas, irpf: 0,
     estado, notas: '', fechaPago: fechaPago || ''
   });
@@ -395,7 +478,7 @@ function cargarDatosEjemplo() {
     };
     if (cfg.qrSepa) state.settings.pago.iban = 'ES91 2100 0418 4502 0005 1332';
     state.settings.pago.linkPago = '';
-    state.settings.facturacion.serie = `F-${y}`;
+    state.settings.facturacion.serie = serieDemo;
   }
   saveState();
 }

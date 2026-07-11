@@ -348,7 +348,7 @@ function duplicarFactura(id) {
   const copia = structuredClone(f);
   copia.id = uid();
   copia.serie = fac.serie;
-  copia.numero = String(fac.siguienteNumero).padStart(4, '0');
+  copia.numero = String(fac.siguienteNumero).padStart(paisCfg().padNumero || 4, '0');
   copia.fecha = hoyISO();
   copia.vencimiento = sumaDias(copia.fecha, fac.diasVencimiento);
   copia.estado = 'borrador';
@@ -393,7 +393,7 @@ function vistaEditorFactura(id) {
   draft = existente ? structuredClone(existente) : {
     id: uid(),
     serie: fac.serie,
-    numero: String(fac.siguienteNumero).padStart(4, '0'),
+    numero: String(fac.siguienteNumero).padStart(cfg.padNumero || 4, '0'),
     fecha: hoyISO(),
     vencimiento: sumaDias(hoyISO(), fac.diasVencimiento),
     clienteId: '',
@@ -401,8 +401,14 @@ function vistaEditorFactura(id) {
     irpf: fac.irpfDefecto,
     estado: 'borrador',
     notas: '',
-    fechaPago: ''
+    fechaPago: '',
+    extras: {}
   };
+  // campos fiscales del país (forma de pago, uso CFDI…) con su primera opción
+  if (!draft.extras) draft.extras = {};
+  (cfg.camposFactura || []).forEach(c => {
+    if (!draft.extras[c.campo]) draft.extras[c.campo] = c.opciones[0];
+  });
   const esNueva = !existente;
 
   $('#topbar-title').textContent = esNueva ? 'Nueva factura' : `Editar ${numeroFactura(draft)}`;
@@ -455,6 +461,13 @@ function vistaEditorFactura(id) {
             </select>
             <div class="help">${escapeHtml(ret.ayuda)}</div>
           </div>` : ''}
+          ${(cfg.camposFactura || []).map(c => `
+          <div class="field">
+            <label for="fe-x-${c.campo}">${escapeHtml(c.etiqueta)}</label>
+            <select id="fe-x-${c.campo}" data-extra="${c.campo}">
+              ${c.opciones.map(o => `<option ${draft.extras[c.campo] === o ? 'selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+            </select>
+          </div>`).join('')}
         </div>
       </div>
 
@@ -517,6 +530,8 @@ function vistaEditorFactura(id) {
 
   const irpfSel = $('#fe-irpf');
   if (irpfSel) irpfSel.addEventListener('change', e => { draft.irpf = Number(e.target.value); pintarTotales(); });
+  view.querySelectorAll('[data-extra]').forEach(sel =>
+    sel.addEventListener('change', e => { draft.extras[e.target.dataset.extra] = e.target.value; }));
   $('#fe-fecha').addEventListener('change', e => {
     draft.fecha = e.target.value;
     draft.vencimiento = sumaDias(draft.fecha, fac.diasVencimiento);
@@ -656,6 +671,7 @@ function htmlFacturaDoc(f) {
         ${e.nif ? `<p>${escapeHtml(cfg.taxId)}: ${escapeHtml(e.nif)}</p>` : ''}
         ${dir(e) ? `<p>${escapeHtml(dir(e))}</p>` : ''}
         <p>${[e.email, e.telefono, e.web].filter(Boolean).map(escapeHtml).join(' · ')}</p>
+        ${e.infoLegal ? `<p style="white-space:pre-line;margin-top:5px">${escapeHtml(e.infoLegal)}</p>` : ''}
       </div>
       <div class="inv-title">
         <div class="doc-type">${escapeHtml(cfg.docTitulo)}</div>
@@ -664,6 +680,8 @@ function htmlFacturaDoc(f) {
           <div class="mrow"><span>${L.fecha}:</span><b>${fechaES(f.fecha)}</b></div>
           <div class="mrow"><span>${L.venc}:</span><b>${fechaES(f.vencimiento)}</b></div>
           ${f.estado === 'pagada' && f.fechaPago ? `<div class="mrow"><span>${L.pagadaEl}:</span><b>${fechaES(f.fechaPago)}</b></div>` : ''}
+          ${(cfg.camposFactura || []).map(cx => f.extras?.[cx.campo]
+            ? `<div class="mrow"><span>${escapeHtml(cx.etiqueta)}:</span><b>${escapeHtml(f.extras[cx.campo])}</b></div>` : '').join('')}
         </div>
       </div>
     </header>
@@ -720,7 +738,14 @@ function htmlFacturaDoc(f) {
       </div>
     </div>
 
-    ${(f.notas || pie) ? `<div class="inv-notes">${escapeHtml([f.notas, pie].filter(Boolean).join('\n'))}</div>` : ''}
+    ${cfg.letras ? `<div class="inv-letras">${escapeHtml(importeEnLetras(t.total))}</div>` : ''}
+
+    ${(() => {
+      // leyenda legal automática cuando hay conceptos exentos / tasa 0
+      const hayExenta = cfg.leyendaExenta && f.lineas.some(l => Number(l.iva) === 0);
+      const notasPie = [hayExenta ? cfg.leyendaExenta : '', f.notas, pie].filter(Boolean).join('\n');
+      return notasPie ? `<div class="inv-notes">${escapeHtml(notasPie)}</div>` : '';
+    })()}
   </article>`;
 }
 
@@ -1366,6 +1391,11 @@ function vistaAjustes() {
           <div class="field"><label>Teléfono</label><input id="aj-tel" type="tel" value="${escapeHtml(e.telefono)}"></div>
           <div class="field"><label>Web</label><input id="aj-web" value="${escapeHtml(e.web)}"></div>
           <div class="field full">
+            <label>Información legal / fiscal en la factura</label>
+            <textarea id="aj-infolegal" placeholder="Se imprime bajo tus datos en cada factura">${escapeHtml(e.infoLegal || '')}</textarea>
+            <div class="help">${escapeHtml(cfg.infoLegalHint || '')}</div>
+          </div>
+          <div class="field full">
             <label>Logotipo (aparece en la factura)</label>
             <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
               ${e.logo ? `<img src="${e.logo}" alt="Logotipo actual" style="max-height:48px;max-width:160px;border:1px solid var(--border);border-radius:6px;padding:4px;background:#fff">` : ''}
@@ -1404,7 +1434,7 @@ function vistaAjustes() {
       <fieldset class="group">
         <legend>Facturación</legend>
         <div class="form-grid-3">
-          <div class="field"><label>Serie</label><input id="aj-serie" class="mono" value="${escapeHtml(f.serie)}"><div class="help">Ej.: F-${new Date().getFullYear()}</div></div>
+          <div class="field"><label>Serie</label><input id="aj-serie" class="mono" value="${escapeHtml(f.serie)}"><div class="help">Ej.: ${escapeHtml(cfg.serieDefecto || 'F-' + new Date().getFullYear())}${state.settings.pais === 'PE' ? ' (formato SUNAT: serie F### y correlativo de 8 dígitos)' : ''}</div></div>
           <div class="field"><label>Próximo número</label><input id="aj-num" type="number" min="1" value="${f.siguienteNumero}"></div>
           <div class="field"><label>Días de vencimiento</label><input id="aj-venc" type="number" min="0" value="${f.diasVencimiento}"></div>
           <div class="field"><label>${imp.nombre} por defecto (%)</label>
@@ -1461,7 +1491,8 @@ function vistaAjustes() {
       direccion: $('#aj-dir').value.trim(), cp: $('#aj-cp').value.trim(),
       ciudad: $('#aj-ciudad').value.trim(), provincia: $('#aj-prov').value.trim(),
       email: $('#aj-email').value.trim(), telefono: $('#aj-tel').value.trim(),
-      web: $('#aj-web').value.trim(), logo: logoData
+      web: $('#aj-web').value.trim(), logo: logoData,
+      infoLegal: $('#aj-infolegal').value.trim()
     });
     Object.assign(state.settings.pago, {
       iban: $('#aj-iban')?.value.trim() ?? p.iban,

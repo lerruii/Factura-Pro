@@ -13,12 +13,29 @@ y emitir facturas con **código QR de pago SEPA** y **enlace de pago online**.
   | País | Impuesto | Retención | Moneda | Doc. fiscal | ID fiscal |
   |---|---|---|---|---|---|
   | España | IVA 21/10/4/0 % | IRPF 0/7/15/19 % | EUR | FACTURA (+ QR SEPA) | NIF/CIF |
+  | México | IVA 16/8/0 % | Ret. ISR 0/1,25/10 % | MXN | FACTURA (campos CFDI) | RFC |
   | Perú | IGV 18/0 % | — | PEN | FACTURA ELECTRÓNICA | RUC |
   | Colombia | IVA 19/5/0 % | Retefuente 0–11 % | COP | FACTURA DE VENTA | NIT |
   | EE. UU. | Sales Tax (tasa libre) | — | USD | INVOICE (en inglés) | EIN |
 
   El QR SEPA se genera solo en España; en el resto de países el QR codifica el
   enlace de pago y la factura muestra los datos bancarios configurados.
+
+  Requisitos legales de contenido que la factura aplica según el país:
+  - **Importe en letras** al pie (Perú «SON: … SOLES», Colombia «… PESOS M/CTE»,
+    México «… PESOS M.N.»)
+  - **Campos fiscales por factura**: forma de pago Contado/Crédito (SUNAT y
+    DIAN) y, en México, Uso CFDI + forma de pago SAT + método de pago (PUE/PPD)
+  - **Información legal del emisor** configurable en Ajustes con la pista de lo
+    que exige cada normativa (resolución de facturación DIAN, régimen fiscal
+    SAT, datos registrales…)
+  - **Leyenda automática** cuando hay conceptos exentos o a tasa 0
+  - **Numeración**: Perú usa serie F001 y correlativo de 8 dígitos (SUNAT)
+
+  > Nota: la factura cumple los requisitos de *contenido*. La facturación
+  > electrónica oficial (timbrado CFDI del SAT, CPE de SUNAT, validación DIAN,
+  > Verifactu) exige integrarse con cada administración tributaria y queda
+  > fuera del alcance actual.
 
 ## Puesta en marcha
 

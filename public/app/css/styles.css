@@ -605,6 +605,8 @@ table.inv-lines .num { text-align: right; font-variant-numeric: tabular-nums; }
 .inv-totals .t-row span:last-child { font-variant-numeric: tabular-nums; color: #0F172A; }
 .inv-totals .t-total { border-top: 2px solid #0F172A; margin-top: 6px; padding-top: 8px; font-size: 16.5px; font-weight: 800; color: #0F172A; }
 
+.inv-letras { margin-top: 16px; font-size: 11px; font-weight: 700; color: #0F172A; letter-spacing: .03em; }
+
 .inv-notes { margin-top: 26px; padding-top: 14px; border-top: 1px solid #E2E8F0; color: #64748B; font-size: 11.5px; white-space: pre-line; }
 
 .invoice-screen-bar {

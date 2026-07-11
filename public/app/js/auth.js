@@ -77,6 +77,7 @@ function mostrarAuth(modo = 'login') {
           <label for="au-pais">País / sistema contable</label>
           <select id="au-pais">
             <option value="ES">España — IVA e IRPF (EUR €)</option>
+            <option value="MX">México — IVA y Ret. ISR (MXN $)</option>
             <option value="PE">Perú — IGV (PEN S/)</option>
             <option value="CO">Colombia — IVA y Retefuente (COP $)</option>
             <option value="US">Estados Unidos — Sales Tax (USD $)</option>
